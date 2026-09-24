@@ -1,0 +1,36 @@
+{
+  "name": "studybridge",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green \"vite\" \"tsx watch server/bootstrap.ts\"",
+    "dev:web": "vite",
+    "dev:api": "tsx watch server/bootstrap.ts",
+    "build": "vite build",
+    "start": "NODE_ENV=production tsx server/bootstrap.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-oauth/google": "^0.13.5",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jwt-decode": "^4.0.0",
+    "nodemailer": "^6.10.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "tsx": "^4.19.3",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "concurrently": "^9.1.2"
+  }
+}
