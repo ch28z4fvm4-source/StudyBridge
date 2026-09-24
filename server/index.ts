@@ -23,6 +23,12 @@ app.use("/api/auth", authRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api", platformRouter);
 
+app.get("/googleee422880ffd0b347.html", (_req, res) => {
+  res
+    .type("text/html")
+    .send("google-site-verification: googleee422880ffd0b347.html");
+});
+
 if (isProd) {
   const distPath = path.join(__dirname, "../dist");
   if (existsSync(distPath)) {
