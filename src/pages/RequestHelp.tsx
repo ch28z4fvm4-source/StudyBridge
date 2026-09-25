@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { SUBJECTS } from "../data/subjects";
+import { api } from "../lib/api";
 
 export default function RequestHelp() {
   const location = useLocation();
