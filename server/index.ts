@@ -32,9 +32,10 @@ app.get("/googleee422880ffd0b347.html", (_req, res) => {
 if (isProd) {
   const distPath = path.join(__dirname, "../dist");
   if (existsSync(distPath)) {
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, { index: false }));
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
+      res.setHeader("Cache-Control", "no-store");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
