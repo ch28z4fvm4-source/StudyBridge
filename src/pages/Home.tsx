@@ -46,8 +46,8 @@ export default function Home() {
             Free tutoring. Real tutors. <em>You can join today.</em>
           </h1>
           <p className="hero-sub">
-            joinstudybridge.academy is free tutoring from real volunteers: get help, or sign up to tutor
-            and earn hours. Founded by Evan Peterson.
+            StudyBridge is a free tutoring platform founded by Evan Peterson. Get help, or sign
+            up to tutor and earn volunteer hours at joinstudybridge.academy.
           </p>
           <div className="hero-actions">
             <Link to={studentCta} className="btn btn-primary btn-lg">
