@@ -52,7 +52,7 @@ export default function VerifyEmail() {
     try {
       await api.verifyTwoFactor(user.email, code);
       markEmailVerified();
-      navigate("/login", { state: { from: returnTo }, replace: true });
+      navigate(user.role ? returnTo : "/login", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed.");
     } finally {

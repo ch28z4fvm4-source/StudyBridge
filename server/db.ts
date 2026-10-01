@@ -18,6 +18,7 @@ export interface UserRecord {
   passwordHash: string;
   salt: string;
   role: UserRole;
+  emailVerified?: boolean;
   picture?: string;
   createdAt: string;
 }
@@ -105,6 +106,14 @@ function load(): Database {
       db.tutors.unshift(founderTutor);
       save(db);
     }
+    let grandfathered = false;
+    for (const user of db.users) {
+      if (user.emailVerified === undefined) {
+        user.emailVerified = true;
+        grandfathered = true;
+      }
+    }
+    if (grandfathered) save(db);
     return db;
   } catch {
     return emptyDb();
@@ -147,7 +156,7 @@ export function publicUser(user: UserRecord) {
     picture: user.picture,
     role: user.role,
     provider: "email" as const,
-    emailVerified: true,
+    emailVerified: user.emailVerified !== false,
   };
 }
 
@@ -171,6 +180,21 @@ export function getSessionSecret(): string {
   return db.sessionSecret;
 }
 
+export function markEmailVerified(userId: string) {
+  const db = load();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) return;
+  user.emailVerified = true;
+  save(db);
+}
+
+export function deleteUser(userId: string) {
+  const db = load();
+  db.users = db.users.filter((u) => u.id !== userId);
+  db.tutors = db.tutors.filter((t) => t.userId !== userId);
+  save(db);
+}
+
 export async function createUser(input: {
   name: string;
   email: string;
@@ -191,6 +215,7 @@ export async function createUser(input: {
     passwordHash: hash,
     salt,
     role: input.role,
+    emailVerified: false,
     createdAt: new Date().toISOString(),
   };
   db.users.push(user);
@@ -238,11 +263,16 @@ export function upsertTutorProfile(input: {
 }
 
 export function listTutors(): TutorRecord[] {
-  return load().tutors;
+  const db = load();
+  return db.tutors.filter((tutor) => {
+    if (tutor.id === "founder") return true;
+    const owner = db.users.find((user) => user.id === tutor.userId);
+    return owner?.emailVerified !== false;
+  });
 }
 
 export function getTutor(id: string): TutorRecord | undefined {
-  return load().tutors.find((t) => t.id === id);
+  return listTutors().find((t) => t.id === id);
 }
 
 export function listRequests(): HelpRequestRecord[] {

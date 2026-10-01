@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { sendTutorHelpRequestEmail } from "../email.js";
 import { addRequest, tutorsForSubject } from "../db.js";
-import { requireAuth, type AuthedRequest } from "../security.js";
+import { requireVerified, type AuthedRequest } from "../security.js";
 
 export const notificationsRouter = Router();
 
-notificationsRouter.post("/help-request", requireAuth, async (req: AuthedRequest, res) => {
+notificationsRouter.post("/help-request", requireVerified, async (req: AuthedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Sign in to continue." });

@@ -54,7 +54,15 @@ export default function JoinAsTutor() {
           bio,
         });
         signIn(result.user);
+        if (!result.user.emailVerified) {
+          navigate("/verify", { state: { from: "/dashboard/tutor" }, replace: true });
+          return;
+        }
       } else if (user) {
+        if (!user.emailVerified) {
+          navigate("/verify", { state: { from: "/join" }, replace: true });
+          return;
+        }
         await api.becomeTutor({
           grade,
           subjects,

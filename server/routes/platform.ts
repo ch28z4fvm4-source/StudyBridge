@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { addRequest, listRequests, listTutors, metrics, getTutor, tutorsForSubject } from "../db.js";
 import { sendTutorHelpRequestEmail } from "../email.js";
-import { publicTutor, requireAuth, requireTutor, type AuthedRequest } from "../security.js";
+import { publicTutor, requireTutor, requireVerified, type AuthedRequest } from "../security.js";
 
 export const platformRouter = Router();
 
@@ -40,7 +40,7 @@ platformRouter.get("/metrics", (_req, res) => {
   res.json(metrics());
 });
 
-platformRouter.post("/requests", requireAuth, async (req: AuthedRequest, res) => {
+platformRouter.post("/requests", requireVerified, async (req: AuthedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Sign in to continue." });

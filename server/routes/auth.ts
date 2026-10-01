@@ -1,7 +1,10 @@
 import { Router } from "express";
 import {
   createUser,
+  deleteUser,
   findUserByEmail,
+  findUserById,
+  markEmailVerified,
   publicUser,
   upsertTutorProfile,
   verifyPassword,
@@ -16,10 +19,12 @@ import {
 } from "../store.js";
 import { sendTwoFactorEmail, sendWelcomeEmail } from "../email.js";
 import {
+  assertRealEmail,
   createSessionToken,
   publicTutor,
   rateLimit,
   requireAuth,
+  requireVerified,
   type AuthedRequest,
 } from "../security.js";
 
@@ -66,6 +71,13 @@ authRouter.post("/signup", authLimit, async (req, res) => {
   }
 
   try {
+    await assertRealEmail(email);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "That email address does not exist." });
+    return;
+  }
+
+  try {
     const user = await createUser({
       name,
       email,
@@ -84,13 +96,21 @@ authRouter.post("/signup", authLimit, async (req, res) => {
       });
     }
 
+    const code = generateCode();
+    setTwoFactorCode(user.email, code);
+
     try {
-      if (!hasWelcomeBeenSent(user.email)) {
-        await sendWelcomeEmail(user.email, user.name, chosenRole);
-        markWelcomeSent(user.email);
+      const result = await sendTwoFactorEmail(user.email, user.name, code);
+      if (!result.sent && process.env.SMTP_HOST) {
+        deleteUser(user.id);
+        res.status(400).json({ error: "That inbox could not receive a verification code. Use a real email." });
+        return;
       }
     } catch (err) {
-      console.error("Welcome email failed:", err);
+      console.error("Verification email failed:", err);
+      deleteUser(user.id);
+      res.status(400).json({ error: "That inbox could not receive a verification code. Use a real email." });
+      return;
     }
 
     res.json({ ok: true, user: publicUser(user), token: createSessionToken(user) });
@@ -116,7 +136,7 @@ authRouter.post("/login", authLimit, async (req, res) => {
   res.json({ ok: true, user: publicUser(user), token: createSessionToken(user) });
 });
 
-authRouter.post("/become-tutor", requireAuth, async (req: AuthedRequest, res) => {
+authRouter.post("/become-tutor", requireVerified, async (req: AuthedRequest, res) => {
   const user = req.user;
   if (!user) {
     res.status(401).json({ error: "Sign in to continue." });
@@ -193,7 +213,14 @@ authRouter.post("/verify-2fa", authLimit, requireAuth, async (req: AuthedRequest
     return;
   }
 
-  res.json({ ok: true, verified: true });
+  markEmailVerified(user.id);
+  const verified = findUserById(user.id);
+  res.json({
+    ok: true,
+    verified: true,
+    user: verified ? publicUser(verified) : undefined,
+    token: createSessionToken({ id: user.id, email: user.email }),
+  });
 });
 
 authRouter.post("/welcome", requireAuth, async (req: AuthedRequest, res) => {

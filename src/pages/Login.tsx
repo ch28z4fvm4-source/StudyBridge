@@ -25,7 +25,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (user?.provider !== "email" && !user?.emailVerified) {
+    if (!user?.emailVerified) {
       navigate("/verify", { state: { from: returnTo }, replace: true });
       return;
     }
@@ -55,6 +55,10 @@ export default function Login() {
           ? await api.signup({ name, email, password, role: intendedRole })
           : await api.login(email, password);
       signIn(result.user);
+      if (!result.user.emailVerified) {
+        navigate("/verify", { state: { from: returnTo }, replace: true });
+        return;
+      }
       if (result.user.role === "student" && intendedRole === "tutor") {
         navigate("/join", { replace: true });
         return;

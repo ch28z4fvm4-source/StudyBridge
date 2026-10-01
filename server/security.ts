@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
+import { promises as dns } from "dns";
 import { findUserById, getSessionSecret, type UserRecord } from "./db.js";
 
 export interface AuthedUser {
@@ -7,6 +8,7 @@ export interface AuthedUser {
   name: string;
   email: string;
   role: "student" | "tutor";
+  emailVerified: boolean;
 }
 
 export type AuthedRequest = Request & { user?: AuthedUser };
@@ -47,7 +49,13 @@ export function readSessionToken(token: string): AuthedUser | null {
     if (!data.id || !data.exp || Date.now() > data.exp) return null;
     const user = findUserById(data.id);
     if (!user) return null;
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified !== false,
+    };
   } catch {
     return null;
   }
@@ -69,10 +77,28 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
   next();
 }
 
+export function requireVerified(req: AuthedRequest, res: Response, next: NextFunction) {
+  const user = getBearerUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+  if (!user.emailVerified) {
+    res.status(403).json({ error: "Verify your email first." });
+    return;
+  }
+  req.user = user;
+  next();
+}
+
 export function requireTutor(req: AuthedRequest, res: Response, next: NextFunction) {
   const user = getBearerUser(req);
   if (!user) {
     res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+  if (!user.emailVerified) {
+    res.status(403).json({ error: "Verify your email first." });
     return;
   }
   if (user.role !== "tutor") {
@@ -84,6 +110,45 @@ export function requireTutor(req: AuthedRequest, res: Response, next: NextFuncti
 }
 
 const hits = new Map<string, { count: number; resetAt: number }>();
+
+const THROW_AWAY_DOMAINS = new Set([
+  "mailinator.com",
+  "guerrillamail.com",
+  "tempmail.com",
+  "10minutemail.com",
+  "trashmail.com",
+  "yopmail.com",
+]);
+
+export async function assertRealEmail(email: string) {
+  const trimmed = email.trim().toLowerCase();
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(trimmed)) {
+    throw new Error("Enter a valid email address.");
+  }
+  const domain = trimmed.split("@")[1];
+  if (!domain || THROW_AWAY_DOMAINS.has(domain)) {
+    throw new Error("Use a real email inbox, not a throwaway address.");
+  }
+  try {
+    const mx = await dns.resolveMx(domain);
+    if (!mx.length) {
+      throw new Error("That email domain cannot receive mail.");
+    }
+  } catch (err) {
+    if (err instanceof Error && /^(Enter a valid|Use a real|That email domain)/.test(err.message)) {
+      throw err;
+    }
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code?: string }).code) : "";
+    if (code === "ENOTFOUND" || code === "ENODATA" || code === "ESERVFAIL") {
+      throw new Error("That email address does not exist.");
+    }
+    if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "EAI_AGAIN") {
+      console.warn("MX lookup unavailable; continuing for", domain, code);
+      return;
+    }
+    throw new Error("That email address does not exist.");
+  }
+}
 
 export function rateLimit(max: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction) => {
