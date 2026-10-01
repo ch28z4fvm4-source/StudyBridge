@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { escapeHtml } from "./security.js";
 
 const fromAddress = process.env.EMAIL_FROM ?? "StudyBridge <noreply@joinstudybridge.academy>";
 
@@ -107,12 +108,12 @@ export async function sendTutorHelpRequestEmail(
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#1b2838">
       <p style="font-size:13px;color:#2d6a4f;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">New help request</p>
-      <h1 style="font-size:20px;margin:8px 0 16px">${payload.subject}</h1>
+      <h1 style="font-size:20px;margin:8px 0 16px">${escapeHtml(payload.subject)}</h1>
       <table style="width:100%;font-size:14px;color:#5c6778;margin-bottom:16px">
-        <tr><td style="padding:4px 0"><strong>Student</strong></td><td>${payload.studentName}</td></tr>
-        <tr><td style="padding:4px 0"><strong>Urgency</strong></td><td>${payload.urgency}</td></tr>
+        <tr><td style="padding:4px 0"><strong>Student</strong></td><td>${escapeHtml(payload.studentName)}</td></tr>
+        <tr><td style="padding:4px 0"><strong>Urgency</strong></td><td>${escapeHtml(payload.urgency)}</td></tr>
       </table>
-      <p style="background:#f3f1ec;padding:12px;border-radius:8px;line-height:1.5;font-size:14px">${payload.description}</p>
+      <p style="background:#f3f1ec;padding:12px;border-radius:8px;line-height:1.5;font-size:14px">${escapeHtml(payload.description)}</p>
       <p style="font-size:14px;margin-top:20px">Accept this request from your <strong>tutor dashboard</strong>.</p>
       <p style="color:#8b95a5;font-size:12px;margin-top:28px">— StudyBridge</p>
     </div>`;

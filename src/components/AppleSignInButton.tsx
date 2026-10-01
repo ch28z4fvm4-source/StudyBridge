@@ -14,7 +14,7 @@ interface AppleSignInButtonProps {
 }
 
 export default function AppleSignInButton({ onSuccess, onError }: AppleSignInButtonProps) {
-  const { signIn, signInWithDemo } = useAuth();
+  const { signIn } = useAuth();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -54,8 +54,7 @@ export default function AppleSignInButton({ onSuccess, onError }: AppleSignInBut
 
   const handleAppleSignIn = useCallback(async () => {
     if (!isAppleConfigured) {
-      signInWithDemo("apple");
-      onSuccess?.();
+      onError?.("Apple sign-in is not set up.");
       return;
     }
 
@@ -76,7 +75,7 @@ export default function AppleSignInButton({ onSuccess, onError }: AppleSignInBut
     } catch {
       onError?.("Apple sign-in was cancelled or failed.");
     }
-  }, [finishSignIn, onError, onSuccess, signInWithDemo]);
+  }, [finishSignIn, onError]);
 
   return (
     <button

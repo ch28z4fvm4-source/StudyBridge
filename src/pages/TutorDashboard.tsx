@@ -15,7 +15,7 @@ export default function TutorDashboard() {
     api
       .listTutors()
       .then((res) => {
-        const mine = res.tutors.find((t) => t.userId === user.id || t.email === user.email);
+        const mine = res.tutors.find((t) => t.userId === user.id);
         setProfile(mine ?? null);
       })
       .catch(() => {});
@@ -104,13 +104,18 @@ export default function TutorDashboard() {
                     <span>
                       {req.subject} — {req.topic}
                     </span>
-                    <span className="text-muted">{req.studentEmail}</span>
+                    <span className="text-muted">{req.studentEmail ?? "Signed-in student"}</span>
                   </div>
                   <span className={`urgency urgency-${req.urgency}`}>{req.urgency}</span>
                   <div className="request-actions">
-                    <a href={`mailto:${req.studentEmail}?subject=StudyBridge: ${req.subject}`} className="btn btn-sm btn-primary">
-                      Accept
-                    </a>
+                    {req.studentEmail ? (
+                      <a
+                        href={`mailto:${req.studentEmail}?subject=StudyBridge: ${req.subject}`}
+                        className="btn btn-sm btn-primary"
+                      >
+                        Accept
+                      </a>
+                    ) : null}
                   </div>
                 </li>
               ))}

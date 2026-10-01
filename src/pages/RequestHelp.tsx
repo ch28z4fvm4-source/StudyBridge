@@ -28,8 +28,6 @@ export default function RequestHelp() {
 
     try {
       const result = await api.notifyHelpRequest({
-        studentName: user.name,
-        studentEmail: user.email,
         subject,
         description,
         urgency,

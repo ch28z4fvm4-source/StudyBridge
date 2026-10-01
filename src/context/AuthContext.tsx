@@ -12,6 +12,7 @@ import {
   type UserRole,
   clearStoredUser,
   loadStoredUser,
+  loadToken,
   saveUser,
 } from "../lib/auth";
 
@@ -62,7 +63,10 @@ function normalizeUser(
 
 function loadUser(): AuthUser | null {
   const stored = loadStoredUser();
-  if (!stored) return null;
+  if (!stored || !loadToken()) {
+    clearStoredUser();
+    return null;
+  }
   if (typeof stored.emailVerified === "boolean") return stored;
   return { ...stored, emailVerified: true };
 }

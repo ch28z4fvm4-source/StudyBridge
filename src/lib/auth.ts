@@ -12,6 +12,7 @@ export interface AuthUser {
 }
 
 export const AUTH_STORAGE_KEY = "studybridge_auth";
+export const AUTH_TOKEN_KEY = "studybridge_token";
 
 export function loadStoredUser(): AuthUser | null {
   try {
@@ -27,8 +28,17 @@ export function saveUser(user: AuthUser) {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
 }
 
+export function saveToken(token: string) {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function loadToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
 export function clearStoredUser() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
 export function dashboardPathForRole(role: UserRole): string {

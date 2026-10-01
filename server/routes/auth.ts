@@ -15,14 +15,23 @@ import {
   verifyTwoFactorCode,
 } from "../store.js";
 import { sendTwoFactorEmail, sendWelcomeEmail } from "../email.js";
+import {
+  createSessionToken,
+  publicTutor,
+  rateLimit,
+  requireAuth,
+  type AuthedRequest,
+} from "../security.js";
 
 export const authRouter = Router();
+const authLimit = rateLimit(10, 15 * 60 * 1000);
+const isProd = process.env.NODE_ENV === "production";
 
 function isRole(value: unknown): value is UserRole {
   return value === "student" || value === "tutor";
 }
 
-authRouter.post("/signup", async (req, res) => {
+authRouter.post("/signup", authLimit, async (req, res) => {
   const { name, email, password, role, grade, subjects, bio } = req.body as {
     name?: string;
     email?: string;
@@ -84,13 +93,13 @@ authRouter.post("/signup", async (req, res) => {
       console.error("Welcome email failed:", err);
     }
 
-    res.json({ ok: true, user: publicUser(user) });
+    res.json({ ok: true, user: publicUser(user), token: createSessionToken(user) });
   } catch (err) {
     res.status(409).json({ error: err instanceof Error ? err.message : "Could not create account." });
   }
 });
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", authLimit, async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
 
   if (!email || !password) {
@@ -99,34 +108,26 @@ authRouter.post("/login", async (req, res) => {
   }
 
   const user = findUserByEmail(email);
-  if (!user) {
-    res.status(401).json({ error: "No account with that email. Sign up to get started." });
+  if (!user || !(await verifyPassword(password, user.salt, user.passwordHash))) {
+    res.status(401).json({ error: "Incorrect email or password." });
     return;
   }
 
-  const ok = await verifyPassword(password, user.salt, user.passwordHash);
-  if (!ok) {
-    res.status(401).json({ error: "Incorrect password." });
-    return;
-  }
-
-  res.json({ ok: true, user: publicUser(user) });
+  res.json({ ok: true, user: publicUser(user), token: createSessionToken(user) });
 });
 
-authRouter.post("/become-tutor", async (req, res) => {
-  const { userId, name, email, grade, subjects, bio } = req.body as {
-    userId?: string;
-    name?: string;
-    email?: string;
+authRouter.post("/become-tutor", requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+
+  const { grade, subjects, bio } = req.body as {
     grade?: string;
     subjects?: string[];
     bio?: string;
   };
-
-  if (!userId || !name || !email) {
-    res.status(400).json({ error: "Account details are required." });
-    return;
-  }
 
   if (!Array.isArray(subjects) || subjects.length === 0 || !bio?.trim()) {
     res.status(400).json({ error: "Subjects and a short bio are required." });
@@ -134,34 +135,38 @@ authRouter.post("/become-tutor", async (req, res) => {
   }
 
   const tutor = upsertTutorProfile({
-    userId,
-    name,
-    email,
+    userId: user.id,
+    name: user.name,
+    email: user.email,
     grade: grade ?? "Tutor",
     subjects,
     bio,
   });
 
-  res.json({ ok: true, tutor, role: "tutor" });
+  res.json({
+    ok: true,
+    tutor: publicTutor(tutor),
+    role: "tutor",
+    token: createSessionToken({ id: user.id, email: user.email }),
+  });
 });
 
-authRouter.post("/send-2fa", async (req, res) => {
-  const { email, name } = req.body as { email?: string; name?: string };
-
-  if (!email || !name) {
-    res.status(400).json({ error: "Email and name are required." });
+authRouter.post("/send-2fa", authLimit, requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
     return;
   }
 
   const code = generateCode();
-  setTwoFactorCode(email, code);
+  setTwoFactorCode(user.email, code);
 
   try {
-    const result = await sendTwoFactorEmail(email, name, code);
+    const result = await sendTwoFactorEmail(user.email, user.name, code);
     res.json({
       ok: true,
-      message: `Verification code sent to ${email}`,
-      devCode: result.devPreview ? code : undefined,
+      message: "Verification code sent.",
+      devCode: !isProd && result.devPreview ? code : undefined,
     });
   } catch (err) {
     console.error("Failed to send 2FA email:", err);
@@ -169,15 +174,20 @@ authRouter.post("/send-2fa", async (req, res) => {
   }
 });
 
-authRouter.post("/verify-2fa", async (req, res) => {
-  const { email, code } = req.body as { email?: string; code?: string };
-
-  if (!email || !code) {
-    res.status(400).json({ error: "Email and code are required." });
+authRouter.post("/verify-2fa", authLimit, requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
     return;
   }
 
-  const result = verifyTwoFactorCode(email, code);
+  const { code } = req.body as { code?: string };
+  if (!code) {
+    res.status(400).json({ error: "Code is required." });
+    return;
+  }
+
+  const result = verifyTwoFactorCode(user.email, code);
   if (!result.ok) {
     res.status(401).json({ error: result.error });
     return;
@@ -186,27 +196,28 @@ authRouter.post("/verify-2fa", async (req, res) => {
   res.json({ ok: true, verified: true });
 });
 
-authRouter.post("/welcome", async (req, res) => {
-  const { email, name, role } = req.body as {
-    email?: string;
-    name?: string;
-    role?: "student" | "tutor";
-  };
-
-  if (!email || !name || !role) {
-    res.status(400).json({ error: "Email, name, and role are required." });
+authRouter.post("/welcome", requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
     return;
   }
 
-  if (hasWelcomeBeenSent(email)) {
+  const { role } = req.body as { role?: "student" | "tutor" };
+  if (!role) {
+    res.status(400).json({ error: "Role is required." });
+    return;
+  }
+
+  if (hasWelcomeBeenSent(user.email)) {
     res.json({ ok: true, message: "Welcome email already sent." });
     return;
   }
 
   try {
-    await sendWelcomeEmail(email, name, role);
-    markWelcomeSent(email);
-    res.json({ ok: true, message: `Welcome email sent to ${email}` });
+    await sendWelcomeEmail(user.email, user.name, role);
+    markWelcomeSent(user.email);
+    res.json({ ok: true, message: "Welcome email sent." });
   } catch (err) {
     console.error("Failed to send welcome email:", err);
     res.status(500).json({ error: "Could not send welcome email." });

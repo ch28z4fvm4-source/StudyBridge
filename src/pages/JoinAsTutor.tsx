@@ -56,9 +56,6 @@ export default function JoinAsTutor() {
         signIn(result.user);
       } else if (user) {
         await api.becomeTutor({
-          userId: user.id,
-          name,
-          email,
           grade,
           subjects,
           bio,

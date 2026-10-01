@@ -53,6 +53,7 @@ interface Database {
   users: UserRecord[];
   tutors: TutorRecord[];
   requests: HelpRequestRecord[];
+  sessionSecret?: string;
 }
 
 const founderTutor: TutorRecord = {
@@ -72,7 +73,12 @@ const founderTutor: TutorRecord = {
 };
 
 function emptyDb(): Database {
-  return { users: [], tutors: [founderTutor], requests: [] };
+  return {
+    users: [],
+    tutors: [founderTutor],
+    requests: [],
+    sessionSecret: randomBytes(32).toString("hex"),
+  };
 }
 
 function load(): Database {
@@ -89,7 +95,12 @@ function load(): Database {
       users: parsed.users ?? [],
       tutors: parsed.tutors ?? [],
       requests: parsed.requests ?? [],
+      sessionSecret: parsed.sessionSecret,
     };
+    if (!db.sessionSecret) {
+      db.sessionSecret = randomBytes(32).toString("hex");
+      save(db);
+    }
     if (!db.tutors.some((t) => t.id === "founder")) {
       db.tutors.unshift(founderTutor);
       save(db);
@@ -146,6 +157,18 @@ export function findUserByEmail(email: string): UserRecord | undefined {
 
 export function findUserById(id: string): UserRecord | undefined {
   return load().users.find((u) => u.id === id);
+}
+
+export function getSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 16) {
+    return process.env.SESSION_SECRET;
+  }
+  const db = load();
+  if (!db.sessionSecret) {
+    db.sessionSecret = randomBytes(32).toString("hex");
+    save(db);
+  }
+  return db.sessionSecret;
 }
 
 export async function createUser(input: {

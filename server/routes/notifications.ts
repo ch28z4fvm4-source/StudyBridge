@@ -1,28 +1,35 @@
 import { Router } from "express";
 import { sendTutorHelpRequestEmail } from "../email.js";
 import { addRequest, tutorsForSubject } from "../db.js";
+import { requireAuth, type AuthedRequest } from "../security.js";
 
 export const notificationsRouter = Router();
 
-notificationsRouter.post("/help-request", async (req, res) => {
-  const { studentName, studentEmail, subject, description, urgency } = req.body as {
-    studentName?: string;
-    studentEmail?: string;
+notificationsRouter.post("/help-request", requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+
+  const { subject, description, urgency } = req.body as {
     subject?: string;
     description?: string;
     urgency?: string;
   };
 
-  if (!studentName || !subject || !description) {
-    res.status(400).json({ error: "Student name, subject, and description are required." });
+  if (!subject || !description) {
+    res.status(400).json({ error: "Subject and description are required." });
     return;
   }
 
+  const topic = description.slice(0, 4000);
+
   addRequest({
-    studentName,
-    studentEmail: studentEmail ?? "",
+    studentName: user.name,
+    studentEmail: user.email,
     subject,
-    topic: description,
+    topic,
     urgency: urgency === "high" || urgency === "low" ? urgency : "medium",
   });
 
@@ -32,6 +39,7 @@ notificationsRouter.post("/help-request", async (req, res) => {
     res.json({
       ok: true,
       notified: 0,
+      tutors: [],
       message: "No available tutors matched that subject. Request saved — check back soon.",
     });
     return;
@@ -43,9 +51,9 @@ notificationsRouter.post("/help-request", async (req, res) => {
   const results = await Promise.allSettled(
     tutors.map((tutor) =>
       sendTutorHelpRequestEmail(tutor.email, tutor.name, {
-        studentName,
+        studentName: user.name,
         subject,
-        description,
+        description: topic,
         urgency: urgencyLabel,
       }),
     ),
@@ -58,6 +66,6 @@ notificationsRouter.post("/help-request", async (req, res) => {
     notified,
     tutors: tutors.map((t) => t.name),
     message: `${notified} tutor${notified === 1 ? "" : "s"} emailed about your ${subject} request.`,
-    studentConfirmationSent: Boolean(studentEmail),
+    studentConfirmationSent: true,
   });
 });

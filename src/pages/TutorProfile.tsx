@@ -101,13 +101,10 @@ export default function TutorProfile() {
         <aside className="profile-sidebar">
           <div className="profile-actions-card">
             <h2>Get help from {tutor.name.split(" ")[0]}</h2>
-            <a href={`mailto:${tutor.email}`} className="btn btn-primary btn-block">
-              Email {tutor.name.split(" ")[0]}
-            </a>
             <Link
               to={requestPath}
               state={{ tutorName: tutor.name, subject: tutor.subjects[0] }}
-              className="btn btn-secondary btn-block"
+              className="btn btn-primary btn-block"
             >
               Request a session
             </Link>

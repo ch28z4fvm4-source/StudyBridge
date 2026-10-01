@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { addRequest, listRequests, listTutors, metrics, getTutor, tutorsForSubject } from "../db.js";
 import { sendTutorHelpRequestEmail } from "../email.js";
+import { publicTutor, requireAuth, requireTutor, type AuthedRequest } from "../security.js";
 
 export const platformRouter = Router();
 
 platformRouter.get("/tutors", (_req, res) => {
-  res.json({ tutors: listTutors() });
+  res.json({ tutors: listTutors().map(publicTutor) });
 });
 
 platformRouter.get("/tutors/:id", (req, res) => {
@@ -14,36 +15,54 @@ platformRouter.get("/tutors/:id", (req, res) => {
     res.status(404).json({ error: "Tutor not found." });
     return;
   }
-  res.json({ tutor });
+  res.json({ tutor: publicTutor(tutor) });
 });
 
-platformRouter.get("/requests", (_req, res) => {
-  res.json({ requests: listRequests() });
+platformRouter.get("/requests", requireTutor, (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+
+  const tutor = listTutors().find((t) => t.userId === user.id);
+  const subjects = tutor?.subjects ?? [];
+  const requests = listRequests().filter((request) =>
+    subjects.length === 0
+      ? false
+      : subjects.some((s) => s.toLowerCase() === request.subject.toLowerCase()),
+  );
+
+  res.json({ requests });
 });
 
 platformRouter.get("/metrics", (_req, res) => {
   res.json(metrics());
 });
 
-platformRouter.post("/requests", async (req, res) => {
-  const { studentName, studentEmail, subject, description, urgency } = req.body as {
-    studentName?: string;
-    studentEmail?: string;
+platformRouter.post("/requests", requireAuth, async (req: AuthedRequest, res) => {
+  const user = req.user;
+  if (!user) {
+    res.status(401).json({ error: "Sign in to continue." });
+    return;
+  }
+
+  const { subject, description, urgency } = req.body as {
     subject?: string;
     description?: string;
     urgency?: "low" | "medium" | "high";
   };
 
-  if (!studentName || !studentEmail || !subject || !description) {
-    res.status(400).json({ error: "Name, email, subject, and description are required." });
+  if (!subject || !description) {
+    res.status(400).json({ error: "Subject and description are required." });
     return;
   }
 
   const request = addRequest({
-    studentName,
-    studentEmail,
+    studentName: user.name,
+    studentEmail: user.email,
     subject,
-    topic: description,
+    topic: description.slice(0, 4000),
     urgency: urgency ?? "medium",
   });
 
@@ -54,9 +73,9 @@ platformRouter.post("/requests", async (req, res) => {
   const results = await Promise.allSettled(
     tutors.map((tutor) =>
       sendTutorHelpRequestEmail(tutor.email, tutor.name, {
-        studentName,
+        studentName: user.name,
         subject,
-        description,
+        description: description.slice(0, 4000),
         urgency: urgencyLabel,
       }),
     ),
@@ -66,7 +85,7 @@ platformRouter.post("/requests", async (req, res) => {
 
   res.json({
     ok: true,
-    request,
+    request: { id: request.id, subject: request.subject },
     notified,
     tutors: tutors.map((t) => t.name),
     message:

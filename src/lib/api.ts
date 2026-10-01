@@ -1,15 +1,30 @@
+import { AUTH_TOKEN_KEY, loadToken, saveToken } from "./auth";
+
 const API_BASE = "/api";
+
+function headers(extra?: HeadersInit): HeadersInit {
+  const token = loadToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(extra ?? {}),
+  };
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
     ...options,
+    headers: headers(options?.headers),
   });
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     throw new Error((data as { error?: string }).error ?? "Request failed");
+  }
+
+  if (typeof (data as { token?: string }).token === "string") {
+    saveToken((data as { token: string }).token);
   }
 
   return data as T;
@@ -46,7 +61,7 @@ export interface TutorProfile {
   id: string;
   userId: string;
   name: string;
-  email: string;
+  email?: string;
   grade: string;
   subjects: string[];
   bio: string;
@@ -61,7 +76,7 @@ export interface TutorProfile {
 export interface HelpRequest {
   id: string;
   studentName: string;
-  studentEmail: string;
+  studentEmail?: string;
   subject: string;
   topic: string;
   urgency: "low" | "medium" | "high";
@@ -84,28 +99,22 @@ export const api = {
     grade?: string;
     subjects?: string[];
     bio?: string;
-  }) => post<{ ok: boolean; user: AuthUserPayload }>("/auth/signup", body),
+  }) => post<{ ok: boolean; user: AuthUserPayload; token: string }>("/auth/signup", body),
 
   login: (email: string, password: string) =>
-    post<{ ok: boolean; user: AuthUserPayload }>("/auth/login", { email, password }),
+    post<{ ok: boolean; user: AuthUserPayload; token: string }>("/auth/login", { email, password }),
 
-  becomeTutor: (body: {
-    userId: string;
-    name: string;
-    email: string;
-    grade: string;
-    subjects: string[];
-    bio: string;
-  }) => post<{ ok: boolean; tutor: TutorProfile; role: "tutor" }>("/auth/become-tutor", body),
+  becomeTutor: (body: { grade: string; subjects: string[]; bio: string }) =>
+    post<{ ok: boolean; tutor: TutorProfile; role: "tutor"; token: string }>("/auth/become-tutor", body),
 
-  sendTwoFactor: (email: string, name: string) =>
-    post<Send2faResponse>("/auth/send-2fa", { email, name }),
+  sendTwoFactor: (_email: string, _name: string) =>
+    post<Send2faResponse>("/auth/send-2fa", {}),
 
-  verifyTwoFactor: (email: string, code: string) =>
-    post<{ ok: boolean; verified: boolean }>("/auth/verify-2fa", { email, code }),
+  verifyTwoFactor: (_email: string, code: string) =>
+    post<{ ok: boolean; verified: boolean }>("/auth/verify-2fa", { code }),
 
-  sendWelcome: (email: string, name: string, role: "student" | "tutor") =>
-    post<{ ok: boolean; message: string }>("/auth/welcome", { email, name, role }),
+  sendWelcome: (_email: string, _name: string, role: "student" | "tutor") =>
+    post<{ ok: boolean; message: string }>("/auth/welcome", { role }),
 
   listTutors: () => request<{ tutors: TutorProfile[] }>("/tutors"),
 
@@ -116,10 +125,10 @@ export const api = {
   metrics: () => request<PlatformMetrics>("/metrics"),
 
   notifyHelpRequest: (payload: {
-    studentName: string;
-    studentEmail: string;
     subject: string;
     description: string;
     urgency: string;
   }) => post<HelpRequestResponse>("/notifications/help-request", payload),
 };
+
+export { AUTH_TOKEN_KEY };
